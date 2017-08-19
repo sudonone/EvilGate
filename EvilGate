@@ -144,6 +144,8 @@ echo "Stopping NetworkManager"
 stop_service "NetworkManager"
 echo "Setting up FakeAP using hostapd..."
 nohup hostapd -B -d hostapd.conf &>/dev/null &
+echo "Launching DHCP + DNS Server dnsmasq..."
+nohup dnsmasq -C dnsmasq.conf &>/dev/null &
 
 read -p "Script is running press any key to cancel..."
 
