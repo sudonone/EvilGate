@@ -1,3 +1,114 @@
 #!/usr/bin/bash
 # EvilGate by Pascal3366
-# This program is meant to be run with Python Version 3
+
+detect_init() {
+  # init process is pid 1
+  INIT=`ls -l /proc/1/exe`
+  if [[ $INIT == *"upstart"* ]]; then
+    SYSTEMINITDAEMON=upstart
+  elif [[ $INIT == *"systemd"* ]]; then
+    SYSTEMINITDAEMON=systemd
+  elif [[ $INIT == *"/sbin/init"* ]]; then
+    INIT=`/sbin/init --version`
+    if [[ $INIT == *"upstart"* ]]; then
+      SYSTEMINITDAEMON=upstart
+    elif [[ $INIT == *"systemd"* ]]; then
+      SYSTEMINITDAEMON=systemd
+    fi
+  fi
+
+  if [ -z "$SYSTEMINITDAEMON" ]; then
+    echo "WARNING: Unknown distribution, assuming defaults - this may fail." >&2
+  fi
+}
+
+detect_package_manager() {
+  if [ -f /usr/bin/pacman ]; then
+    PACKAGEMANAGER=pacman
+  elif [ -f /usr/bin/apt ]; then
+    PACKAGEMANAGER=apt
+  elif [ -f /usr/bin/yum ]; then
+    PACKAGEMANAGER=yum
+  elif [ -f /usr/bin/dnf ]; then
+    PACKAGEMANAGER=dnf
+  elif [ -f /usr/bin/emerge ]; then
+    PACKAGEMANAGER=portage
+  fi
+}
+
+install_package() {
+  if [ "$PACKAGEMANAGER" = "pacman" ]; then
+    pacman -S $1
+  elif [ "$PACKAGEMANAGER" = "apt" ]; then
+    apt install $1
+  elif [ "$PACKAGEMANAGER" = "yum" ]; then
+    yum install $1
+  elif [ "$PACKAGEMANAGER" = "dnf" ]; then
+    dnf install $1
+  elif [ "$PACKAGEMANAGER" = "portage" ]; then
+    emerge $1
+  fi
+}
+
+check_requirements() {
+  if [ -f /usr/bin/hostapd ]; then
+    echo "[hostapd]: installed"
+    HOSTAPD=true
+  else
+    echo "[hostapd]: missing"
+    HOSTAPD=false
+  fi
+
+  if [ -f /usr/bin/nginx ]; then
+    echo "[nginx]: installed"
+    NGINX=true
+  else
+    echo "[nginx]: missing"
+    NGINX=false
+  fi
+
+  if [ -f /usr/bin/sslstrip ]; then
+    echo "[sslstrip]: installed"
+    SSLSTRIP=true
+  else
+    echo "[sslstrip]: missing"
+    SSLSTRIP=false
+  fi
+}
+
+install_requirements() {
+  if [ "$HOSTAPD" = false ]; then
+    echo "Installing hostapd..."
+    install_package "hostapd"
+  fi
+
+  if [ "$NGINX" = false ]; then
+    echo "Installing nginx..."
+    install_package "nginx"
+  fi
+
+  if [ "$SSLSTRIP" = false ]; then
+    echo "Installing sslstrip..."
+    install_package "sslstrip"
+  fi
+}
+
+start_service() {
+  if [ "$SYSTEMINITDAEMON" = "systemd" ]; then
+    systemctl start $1
+  elif ["$SYSTEMINITDAEMON" = "upstart" ]; then
+    /etc/init.d/$1 start
+  fi
+}
+
+detect_init
+detect_package_manager
+
+echo "Detected Init System:" $SYSTEMINITDAEMON
+echo "Detected Package Manager:" $PACKAGEMANAGER
+echo "Checking Requirements..."
+check_requirements
+echo "Installing missing Requirements..."
+install_requirements
+echo "Starting nginx"
+start_service "nginx"
