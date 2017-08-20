@@ -179,8 +179,6 @@ iptables -t nat -A POSTROUTING -j MASQUERADE
 iptables -A FORWARD -i $INTERFACE1 -o $INTERFACE2 -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -A FORWARD -i $INTERFACE2 -o $INTERFACE1 -j ACCEPT
 
-sysctl -w net.ipv4.ip_forward=1
-
 echo "Launching DHCP + DNS Server dnsmasq..."
 dnsmasq -C dnsmasq.conf &
 echo "Setting up FakeAP using hostapd..."
